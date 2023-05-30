@@ -14,4 +14,8 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-
+Route::namespace('Product')->prefix('products')->group(function() {
+    Route::controller(ProductInfoController::class)->group(function() {
+       Route::get('/', 'index');
+    });
+});
