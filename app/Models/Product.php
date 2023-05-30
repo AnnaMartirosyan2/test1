@@ -14,7 +14,7 @@ class Product extends Model
     use HasFactory;
 
     protected $fillable = [
-        'title',
+        'name',
         'frequency'
     ];
 
@@ -28,7 +28,7 @@ class Product extends Model
     public function scopeSearch(Builder $query, string|null $search): void
     {
         if (!is_null($search)) {
-            $query->where('title', 'LIKE', "%{$search}%");
+            $query->where('name', 'LIKE', "%{$search}%");
         }
     }
 }
