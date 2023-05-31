@@ -31,4 +31,12 @@ class Product extends Model
             $query->where('name', 'LIKE', "%{$search}%");
         }
     }
+
+    public function scopeOrderByFrequency(Builder $query): void
+    {
+        $data = [];
+        $query->whereIn('frequency', $data);
+    }
+
+
 }
