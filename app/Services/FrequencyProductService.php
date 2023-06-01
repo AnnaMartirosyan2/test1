@@ -7,15 +7,22 @@ class FrequencyProductService
     /**
      * Add a frequency count to the product you are looking for.
      *
-     * @param $data
+     * @param object $data
+     * @param bool $show
      * @return void
      */
-    public function addFrequencyCount($data): void
+    public function addFrequencyCount(object $data, bool $show = false): void
     {
-        foreach ($data as $item) {
-            $item->update([
-                'frequency' => $item->frequency + 1
+        if ($show) {
+            $data->update([
+                'frequency' => $data->frequency + 1
             ]);
+        } else {
+            foreach ($data as $item) {
+                $item->update([
+                    'frequency' => $item->frequency + 1
+                ]);
+            }
         }
     }
 }

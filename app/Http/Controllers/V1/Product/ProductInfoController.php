@@ -39,6 +39,7 @@ class ProductInfoController extends Controller
      */
     public function show(Product $product): ProductShowResource
     {
+        $this->frequencyProductService->addFrequencyCount($product, true);
         return new ProductShowResource($product);
     }
 }

@@ -8,61 +8,132 @@ use Illuminate\Support\Str;
 
 class SimilarProductService
 {
+    /**
+     * Show product id.
+     *
+     * @var int
+     */
+    private int $productId;
+
+    /**
+     * Show product name.
+     *
+     * @var string
+     */
     private string $name;
+
+    /**
+     * All products filtered by name.
+     *
+     * @var Collection
+     */
+    private Collection $products;
 
     /**
      * Get similar products.
      *
-     * @param $name
+     * @param int $id
+     * @param string $name
      * @return Collection
      */
-    public function getSimilarProducts($name): Collection
+    public function getSimilarProducts(int $id, string $name): Collection
     {
+        $this->productId = $id;
         $this->name = $name;
+        $this->products = $this->getProductsByNameFilter();
 
-        $generalWords = $this->getGeneralWords();
-        // TODO change
-        $products = Product::where('name', 'LIKE', '%' . $generalWords[0] . '%')
+        if (!$this->products->count()) {
+            $similarProducts = $this->getRandomProducts(15);
+        } elseif  ($this->products->count() <= 15) {
+            $similarProducts = Product::whereIn('id', $this->products->pluck('id'))->get();
+
+            if ($this->products->count() < 15) {
+                $randomProducts = $this->getRandomProducts(15 - $this->products->count());
+                $similarProducts = $randomProducts->merge($similarProducts);
+            }
+        } else {
+            $similarProducts = $this->getProductsByFrequency();
+        }
+
+        return $similarProducts;
+    }
+
+    /**
+     * Get products by name.
+     *
+     * @return mixed
+     */
+    private function getProductsByNameFilter(): mixed
+    {
+        $words = Str::lower($this->name);
+        $words = Str::replace(['-', '_'], ' ', $words);
+        /**
+         * ТЗ: (предлоги, союзы и частицы не учитываются)
+         * We can reject when in_array($word, ['and', 'or', 'и', 'или', etc]).
+         * But I reject when Str::length($word) <= 2 because the data in the db was added by the factory.
+         */
+        $generalWords =  Str::of($words)->explode(' ')->reject(function ($word) {
+            return Str::length($word) <= 2;
+        });
+
+        return Product::where('id', '!=', $this->productId)
+            ->where(function ($query) use ($generalWords) {
+                foreach ($generalWords as $word) {
+                        $query->orWhere('name', 'like', "%{$word}%");
+                        $query->orWhere('name', 'like', "%{$word}_%");
+                        $query->orWhere('name', 'like', "%{$word}'%");
+                    }
+                })
             ->select('id', 'frequency')
             ->get();
+    }
 
-        if ($products->count() > 15) {
-            $totalWeight = 0;
-            $cumulativeWeights = [];
+    /**
+     * Get products by frequency.
+     *
+     * @return Collection
+     */
+    private function getProductsByFrequency(): Collection
+    {
+        $productsPluckId = $this->products->pluck('id')->toArray();
 
-            foreach ($products as $product) {
-                $frequency = $product->frequency ? 1 / $product->frequency : 0;
-                $totalWeight += $frequency;
-                $cumulativeWeights[] = $totalWeight;
-            }
+        $totalFrequency = 0;
+        $cumulativeFrequency = [];
 
-            $randomProducts = collect();
-            $selectedCount = 0;
-            $productCount = count($products);
+        foreach ($this->products as $product) {
+            $frequency = $product->frequency ? (1 / $product->frequency) : 0;
+            $totalFrequency += $frequency;
+            $cumulativeFrequency[] = $totalFrequency;
+        }
 
-            while ($selectedCount < 15 && $selectedCount < $productCount) {
-                $randomNumber = mt_rand() / mt_getrandmax() * $totalWeight;
+        $similarProducts = collect();
+        $selectedCount = 0;
 
-                $selectedProductIndex = $this->binarySearch($cumulativeWeights, $randomNumber);
-                $selectedProductIndex2 = $selectedProductIndex + 100;
+        while ($selectedCount < 15 && $selectedCount < count($this->products)) {
+            $randomNumber = mt_rand() / mt_getrandmax() * $totalFrequency;
 
-                if (is_int($selectedProductIndex / 27)) {
-                    $order = 'ASC';
-                    var_dump($selectedProductIndex);
+            $selectedProductIndex = $this->binarySearch($cumulativeFrequency, $randomNumber);
+            $selectedProductIndex2 = $selectedProductIndex + 200;
+
+            $productIds = array_filter(
+                $productsPluckId,
+                function ($value) use($selectedProductIndex, $selectedProductIndex2) {
+                    return ($value >= $selectedProductIndex && $value <= $selectedProductIndex2);
                 }
+            );
 
-                $selectedProduct = Product::whereBetween('id', [$selectedProductIndex, $selectedProductIndex2])
-                    ->orderBy('frequency', $order ?? 'DESC')
-                    ->first();
+            $selectedProduct = Product::whereIn('id', $productIds)
+                ->orderBy('frequency', is_int($selectedProductIndex / 100) ? 'ASC' : 'DESC')
+                ->skip(is_int($selectedProductIndex / 100) ? 1 : 0)
+                ->first();
 
-                if (!$randomProducts->contains('id', $selectedProduct->id)) {
-                    $randomProducts->push($selectedProduct);
-                    $selectedCount++;
-                }
+            if (!is_null($selectedProduct) && !$similarProducts->contains('id', $selectedProduct->id)) {
+                $similarProducts->push($selectedProduct);
+                $selectedCount++;
             }
         }
 
-        return $randomProducts ?? collect();
+        return $similarProducts;
     }
 
     /**
@@ -91,16 +162,17 @@ class SimilarProductService
     }
 
     /**
-     * Get all general words of a string.
+     * Get random products.
      *
-     * @return Collection
+     * @param $count
+     * @return mixed
      */
-    private function getGeneralWords(): Collection
+    private function getRandomProducts($count): mixed
     {
-        $words = Str::lower($this->name);
-        $words = Str::replace(['-', '_'], ' ', $words);
-        return Str::of($words)->explode(' ')->reject(function ($word) {
-            return Str::length($word) <= 2;
-        });
+        return Product::whereNotIn('id', $this->products->pluck('id'))
+            ->where('id', '!=', $this->productId)
+            ->inRandomOrder()
+            ->take($count)
+            ->get();
     }
 }

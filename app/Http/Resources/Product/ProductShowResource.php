@@ -20,7 +20,7 @@ class ProductShowResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'frequency' => $this->frequency,
-            'similar_products' => $similarProductService->getSimilarProducts($this->name)
+            'similar_products' => $similarProductService->getSimilarProducts($this->id, $this->name)
         ];
     }
 }
