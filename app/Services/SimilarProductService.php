@@ -95,6 +95,11 @@ class SimilarProductService
      */
     private function getProductsByFrequency(): Collection
     {
+        /**
+         * 14/100
+         * Chance to get low frequency products.
+         */
+        $lowFrequencyChance = (int)(Product::all()->count() / 14);
         $productsPluckId = $this->products->pluck('id')->toArray();
 
         $totalFrequency = 0;
@@ -123,8 +128,7 @@ class SimilarProductService
             );
 
             $selectedProduct = Product::whereIn('id', $productIds)
-                ->orderBy('frequency', is_int($selectedProductIndex / 100) ? 'ASC' : 'DESC')
-                ->skip(is_int($selectedProductIndex / 100) ? 1 : 0)
+                ->orderBy('frequency', is_int($selectedProductIndex / $lowFrequencyChance) ? 'ASC' : 'DESC')
                 ->first();
 
             if (!is_null($selectedProduct) && !$similarProducts->contains('id', $selectedProduct->id)) {
